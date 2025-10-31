@@ -1,36 +1,29 @@
-# .github/workflows/your_workflow_file.yml (예시)
-
-name: Deploy Flutter Web to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main # 코드를 푸시하는 브랜치
+    branches: [ main ]
 
-# 여기를 주목하세요! 이 블록을 추가해야 합니다.
 permissions:
-  contents: write # 리포지토리의 내용을 읽고 쓰는 권한 부여
-  pages: write    # (선택 사항이지만 권장) GitHub Pages 관리에 필요한 권한
-  id-token: write # (선택 사항이지만 권장) OIDC 토큰 관리에 필요한 권한
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  build_and_deploy:
+  deploy:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v3
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.1'  # 이 부분을 변경!
-          channel: 'stable'
-
-      - name: Get dependencies
-        run: flutter pub get
+          flutter-version: '3.x'
 
       - name: Build web
-        run: flutter build web --release --base-href "/proclaim-app/"
+        run: |
+          flutter pub get
+          flutter build web --release --base-href /proclaim_test/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
