@@ -1,5 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/meditation.dart';
 
 class MeditationService {
@@ -8,26 +7,54 @@ class MeditationService {
   factory MeditationService() => _instance;
   MeditationService._internal();
 
-  static const String _storageKey = 'meditations';
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Map<String, List<Meditation>> _meditationsCache = {}; // userId별 캐시
+
+  // Firestore 컬렉션 참조
+  CollectionReference _getUserMeditationsCollection(String userId) {
+    return _firestore.collection('users').doc(userId).collection('meditations');
+  }
+
+  // 고유 ID 생성
+  String generateId() {
+    return 'meditation_${DateTime.now().millisecondsSinceEpoch}';
+  }
 
   // 사용자의 모든 묵상 가져오기
   Future<List<Meditation>> getMeditations(String userId) async {
-    // 캐시 확인
-    if (_meditationsCache.containsKey(userId)) {
-      return _meditationsCache[userId]!;
+    try {
+      print('🔍 Firestore에서 묵상 조회: userId=$userId');
+
+      final snapshot = await _getUserMeditationsCollection(userId).get();
+
+      final meditations = snapshot.docs
+          .map((doc) {
+        try {
+          final data = doc.data() as Map<String, dynamic>;
+          return Meditation.fromJson(data);
+        } catch (e) {
+          print('⚠️ 묵상 파싱 실패: ${doc.id}, $e');
+          return null;
+        }
+      })
+          .where((m) => m != null)
+          .cast<Meditation>()
+          .toList();
+
+      print('✅ 묵상 ${meditations.length}개 로드됨');
+
+      // 캐시 업데이트
+      _meditationsCache[userId] = meditations;
+      return meditations;
+    } catch (e) {
+      print('❌ Firestore 묵상 조회 실패: $e');
+      // 캐시가 있으면 캐시 반환
+      if (_meditationsCache.containsKey(userId)) {
+        print('⚠️ 캐시에서 반환');
+        return _meditationsCache[userId]!;
+      }
+      return [];
     }
-
-    // SharedPreferences에서 로드
-    final prefs = await SharedPreferences.getInstance();
-    final meditationsJson = prefs.getStringList('${_storageKey}_$userId') ?? [];
-
-    final meditations = meditationsJson
-        .map((json) => Meditation.fromJson(jsonDecode(json)))
-        .toList();
-
-    _meditationsCache[userId] = meditations;
-    return meditations;
   }
 
   // 특정 구절의 묵상들 가져오기
@@ -37,54 +64,96 @@ class MeditationService {
       int chapter,
       int verse,
       ) async {
-    final allMeditations = await getMeditations(userId);
+    try {
+      print('🔍 구절별 묵상 조회: $book $chapter:$verse');
 
-    return allMeditations.where((meditation) {
-      return meditation.verses.any((v) =>
-      v.book == book && v.chapter == chapter && v.verse == verse);
-    }).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // 최신순 정렬
+      // Firestore 쿼리 (verses 배열 필드 검색)
+      final snapshot = await _getUserMeditationsCollection(userId)
+          .where('verses', arrayContains: {
+        'book': book,
+        'chapter': chapter,
+        'verse': verse,
+      })
+          .get();
+
+      final meditations = snapshot.docs
+          .map((doc) {
+        try {
+          final data = doc.data() as Map<String, dynamic>;
+          return Meditation.fromJson(data);
+        } catch (e) {
+          print('⚠️ 묵상 파싱 실패: ${doc.id}, $e');
+          return null;
+        }
+      })
+          .where((m) => m != null)
+          .cast<Meditation>()
+          .toList();
+
+      // 최신순 정렬
+      meditations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      print('✅ 해당 구절 묵상 ${meditations.length}개 발견');
+      return meditations;
+    } catch (e) {
+      print('❌ 구절별 묵상 조회 실패: $e');
+      // 폴백: 전체 묵상에서 필터링
+      final allMeditations = await getMeditations(userId);
+      return allMeditations.where((meditation) {
+        return meditation.verses.any((v) =>
+        v.book == book && v.chapter == chapter && v.verse == verse);
+      }).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
   }
 
   // 묵상 저장
   Future<void> saveMeditation(Meditation meditation) async {
-    final meditations = await getMeditations(meditation.userId);
+    try {
+      print('💾 Firestore에 묵상 저장: ${meditation.id}');
 
-    // 기존 묵상 찾기
-    final index = meditations.indexWhere((m) => m.id == meditation.id);
+      final docRef = _getUserMeditationsCollection(meditation.userId)
+          .doc(meditation.id);
 
-    if (index >= 0) {
-      // 기존 묵상 업데이트
-      meditations[index] = meditation;
-    } else {
-      // 새 묵상 추가
-      meditations.add(meditation);
+      await docRef.set(meditation.toJson());
+
+      print('✅ 묵상 저장 완료');
+
+      // 캐시 업데이트
+      if (_meditationsCache.containsKey(meditation.userId)) {
+        final meditations = _meditationsCache[meditation.userId]!;
+        final index = meditations.indexWhere((m) => m.id == meditation.id);
+        if (index >= 0) {
+          meditations[index] = meditation;
+        } else {
+          meditations.add(meditation);
+        }
+      }
+    } catch (e) {
+      print('❌ Firestore 묵상 저장 실패: $e');
+      rethrow;
     }
-
-    // SharedPreferences에 저장
-    await _saveMeditations(meditation.userId, meditations);
-
-    // 캐시 업데이트
-    _meditationsCache[meditation.userId] = meditations;
   }
 
   // 묵상 삭제
   Future<void> deleteMeditation(String userId, String meditationId) async {
-    final meditations = await getMeditations(userId);
-    meditations.removeWhere((m) => m.id == meditationId);
+    try {
+      print('🗑️ Firestore에서 묵상 삭제: $meditationId');
 
-    await _saveMeditations(userId, meditations);
-    _meditationsCache[userId] = meditations;
-  }
+      await _getUserMeditationsCollection(userId)
+          .doc(meditationId)
+          .delete();
 
-  // SharedPreferences에 저장
-  Future<void> _saveMeditations(String userId, List<Meditation> meditations) async {
-    final prefs = await SharedPreferences.getInstance();
-    final meditationsJson = meditations
-        .map((m) => jsonEncode(m.toJson()))
-        .toList();
+      print('✅ 묵상 삭제 완료');
 
-    await prefs.setStringList('${_storageKey}_$userId', meditationsJson);
+      // 캐시 업데이트
+      if (_meditationsCache.containsKey(userId)) {
+        _meditationsCache[userId]!.removeWhere((m) => m.id == meditationId);
+      }
+    } catch (e) {
+      print('❌ Firestore 묵상 삭제 실패: $e');
+      rethrow;
+    }
   }
 
   // 특정 구절이 하이라이트되어 있는지 확인
@@ -98,17 +167,54 @@ class MeditationService {
 
     if (meditations.isEmpty) return null;
 
-    // 가장 최근 묵상의 하이라이트 색상 반환
+    // 가장 최근 묵상의 색상 반환
     return meditations.first.highlightColor;
   }
 
-  // 묵상 ID 생성
-  String generateId() {
-    return DateTime.now().millisecondsSinceEpoch.toString();
+  // 특정 날짜의 묵상 가져오기
+  Future<List<Meditation>> getMeditationsByDate(
+      String userId,
+      DateTime date,
+      ) async {
+    try {
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final snapshot = await _getUserMeditationsCollection(userId)
+          .where('createdAt', isGreaterThanOrEqualTo: startOfDay.toIso8601String())
+          .where('createdAt', isLessThan: endOfDay.toIso8601String())
+          .get();
+
+      final meditations = snapshot.docs
+          .map((doc) {
+        try {
+          final data = doc.data() as Map<String, dynamic>;
+          return Meditation.fromJson(data);
+        } catch (e) {
+          return null;
+        }
+      })
+          .where((m) => m != null)
+          .cast<Meditation>()
+          .toList();
+
+      meditations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return meditations;
+    } catch (e) {
+      print('❌ 날짜별 묵상 조회 실패: $e');
+      return [];
+    }
   }
 
-  // 캐시 클리어
+  // 캐시 초기화
   void clearCache() {
     _meditationsCache.clear();
+    print('🗑️ 묵상 캐시 초기화');
+  }
+
+  // 특정 사용자 캐시 초기화
+  void clearUserCache(String userId) {
+    _meditationsCache.remove(userId);
+    print('🗑️ $userId 캐시 초기화');
   }
 }
