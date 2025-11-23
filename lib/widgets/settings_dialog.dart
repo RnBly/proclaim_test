@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'translation_dialog.dart';
 import '../services/auth_service.dart';
+import '../screens/login_screen.dart';
 
 class SettingsDialog extends StatefulWidget {
   final Translation currentTranslation;
@@ -118,7 +119,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   void _handleLogin() {
     Navigator.of(context).pop(); // 설정 다이얼로그 닫기
-    Navigator.of(context).pushNamed('/login'); // 로그인 화면으로
+
+    // HomeScreen context에서 LoginScreen으로 교체
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+    );
   }
 
   @override

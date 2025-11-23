@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/meditation.dart';
 
@@ -43,6 +44,24 @@ class _MeditationViewDialogState extends State<MeditationViewDialog> {
     return DateFormat('M월 d일').format(date);
   }
 
+  // 본문(구절) 복사 함수
+  void _copyVerses() {
+    // 구절 텍스트만 생성
+    final versesText = _currentMeditation.verses
+        .map((v) => '${v.displayText}\n${v.text}')
+        .join('\n\n');
+
+    Clipboard.setData(ClipboardData(text: versesText));
+
+    // 복사 완료 스낵바
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('본문이 복사되었습니다'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -81,29 +100,50 @@ class _MeditationViewDialogState extends State<MeditationViewDialog> {
             const Divider(),
             const SizedBox(height: 12),
 
-            // 선택된 구절들 - Expanded로 변경
+            // 선택된 구절들 - 복사 가능하게 수정
             Expanded(
               flex: 2, // 전체의 약 2/5
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _currentMeditation.verses.map((verse) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _buildVerseItem(verse),
-                        );
-                      }).toList(),
-                    ),
+              child: InkWell(
+                onTap: _copyVerses,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Stack(
+                    children: [
+                      // 구절 내용
+                      Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: _currentMeditation.verses.map((verse) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildVerseItem(verse),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      // 오른쪽 위 복사 아이콘
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.content_copy, size: 18),
+                          color: Colors.grey.shade600,
+                          onPressed: _copyVerses,
+                          tooltip: '본문 복사',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

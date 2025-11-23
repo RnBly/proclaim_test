@@ -23,7 +23,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final PageController _pageController = PageController();
   int _currentPage = 0;
   DateTime _selectedDate = DateTime.now();
@@ -52,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _loadSavedPreferences();
-    _loadMeditations(); // 묵상 데이터 로드
 
     // 버튼 확장 애니메이션 설정
     _expandController = AnimationController(
@@ -63,6 +64,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       parent: _expandController,
       curve: Curves.easeInOut,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 표시될 때마다 묵상 로드
+    _loadMeditations();
   }
 
   // 묵상 데이터 로드
@@ -110,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin 필수
     final dateStr = '${_selectedDate.month}월 ${_selectedDate.day}일';
 
     return Scaffold(
@@ -327,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: TextStyle(
                   fontSize: 40,
                   color: Colors.white,
-                  fontWeight: FontWeight.w200,
+                  fontWeight: FontWeight.w300,
                   height: 1.0,
                 ),
               ),

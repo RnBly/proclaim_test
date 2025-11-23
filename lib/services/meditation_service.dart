@@ -67,43 +67,22 @@ class MeditationService {
     try {
       print('🔍 구절별 묵상 조회: $book $chapter:$verse');
 
-      // Firestore 쿼리 (verses 배열 필드 검색)
-      final snapshot = await _getUserMeditationsCollection(userId)
-          .where('verses', arrayContains: {
-        'book': book,
-        'chapter': chapter,
-        'verse': verse,
-      })
-          .get();
-
-      final meditations = snapshot.docs
-          .map((doc) {
-        try {
-          final data = doc.data() as Map<String, dynamic>;
-          return Meditation.fromJson(data);
-        } catch (e) {
-          print('⚠️ 묵상 파싱 실패: ${doc.id}, $e');
-          return null;
-        }
-      })
-          .where((m) => m != null)
-          .cast<Meditation>()
-          .toList();
-
-      // 최신순 정렬
-      meditations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      print('✅ 해당 구절 묵상 ${meditations.length}개 발견');
-      return meditations;
-    } catch (e) {
-      print('❌ 구절별 묵상 조회 실패: $e');
-      // 폴백: 전체 묵상에서 필터링
+      // 전체 묵상을 가져와서 필터링 (더 안정적)
       final allMeditations = await getMeditations(userId);
-      return allMeditations.where((meditation) {
+
+      final filtered = allMeditations.where((meditation) {
         return meditation.verses.any((v) =>
         v.book == book && v.chapter == chapter && v.verse == verse);
-      }).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }).toList();
+
+      // 최신순 정렬
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      print('✅ 해당 구절 묵상 ${filtered.length}개 발견');
+      return filtered;
+    } catch (e) {
+      print('❌ 구절별 묵상 조회 실패: $e');
+      return [];
     }
   }
 

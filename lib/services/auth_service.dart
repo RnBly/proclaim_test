@@ -61,7 +61,7 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // 로그인 여부 확인
-  bool get isLoggedIn => _auth.currentUser != null;
+  bool get isLoggedIn => _loginProvider != null;
 
   // Google 로그인
   Future<UserCredential?> signInWithGoogle() async {
@@ -94,12 +94,18 @@ class AuthService {
   // Kakao 로그인 (JavaScript 호출)
   Future<UserCredential?> signInWithKakao() async {
     try {
+      print('🔍 Kakao 로그인 시작...');
+
       // JavaScript의 kakaoLogin.login 함수 호출
       final kakaoLoginObj = js.context['kakaoLogin'];
+      print('🔍 kakaoLoginObj: $kakaoLoginObj');
+
       final jsPromise = kakaoLoginObj.callMethod('login');
+      print('🔍 jsPromise 호출 완료');
 
       // Promise를 Future로 변환
       final result = await _promiseToFuture(jsPromise);
+      print('🔍 Promise 결과: $result');
 
       if (result == null) {
         print('❌ Kakao 로그인 취소');
@@ -108,9 +114,17 @@ class AuthService {
 
       // 사용자 데이터 파싱 (이미 객체로 반환됨)
       final jsUserInfo = result as js.JsObject;
+      print('🔍 jsUserInfo type: ${jsUserInfo.runtimeType}');
+      print('🔍 jsUserInfo: $jsUserInfo');
+
       final kakaoId = jsUserInfo['id'].toString();
+      print('🔍 Extracted Kakao ID: $kakaoId');
+
       final nickname = jsUserInfo['nickname'].toString();
+      print('🔍 Extracted nickname: $nickname');
+
       final profileImage = jsUserInfo['profileImage'].toString();
+      print('🔍 Extracted profileImage: $profileImage');
 
       print('✅ Kakao 사용자 정보: ID=$kakaoId, 닉네임=$nickname');
 
