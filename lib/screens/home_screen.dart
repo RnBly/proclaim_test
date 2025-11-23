@@ -15,6 +15,7 @@ import '../widgets/verse_selection_dialog.dart';
 import '../widgets/meditation_writing_dialog.dart';
 import '../widgets/color_selection_dialog.dart';
 import '../widgets/meditation_view_dialog.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -287,26 +288,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               ),
             ),
 
-          // 묵상 버튼 (확장 시, 로그인된 경우에만)
-          if (_isExpanded && isLoggedIn)
+          // 묵상 버튼 (항상 표시, 비로그인 시 반투명)
+          if (_isExpanded)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: ScaleTransition(
                 scale: _expandAnimation,
-                child: FloatingActionButton(
-                  heroTag: 'meditation',
-                  onPressed: () {
-                    setState(() {
-                      _isExpanded = false;
-                      _expandController.reverse();
-                    });
-                    _startMeditation();
-                  },
-                  backgroundColor: const Color(0xFFCE6E26),
-                  child: const Icon(
-                    Icons.edit,
-                    color: Colors.white,
-                    size: 24,
+                child: Opacity(
+                  opacity: isLoggedIn ? 1.0 : 0.4,  // 비로그인 시 투명
+                  child: FloatingActionButton(
+                    heroTag: 'meditation',
+                    onPressed: () {
+                      if (isLoggedIn) {
+                        // 로그인됨 → 버튼 닫고 묵상 작성
+                        setState(() {
+                          _isExpanded = false;
+                          _expandController.reverse();
+                        });
+                        _startMeditation();
+                      } else {
+                        // 비로그인 → 버튼 닫고 로그인 유도
+                        setState(() {
+                          _isExpanded = false;
+                          _expandController.reverse();
+                        });
+                        _showLoginPrompt();
+                      }
+                    },
+                    backgroundColor: const Color(0xFFCE6E26),
+                    child: const Icon(
+                      Icons.edit,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                 ),
               ),
@@ -412,6 +426,113 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   bool _hasSelectedVerses() {
     return _selectedVerses.values.any((set) => set.isNotEmpty);
+  }
+
+  // 로그인 유도 다이얼로그
+  void _showLoginPrompt() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.85,
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // X 버튼
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // 아이콘
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCE6E26).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.edit_note,
+                  size: 48,
+                  color: Color(0xFFCE6E26),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 메시지
+              const Text(
+                '로그인하면\n묵상 기록이 가능합니다',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                '지금 로그인하시겠어요?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // 로그인 버튼
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context); // 다이얼로그 닫기
+
+                    // 로그인 화면으로 이동
+                    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFCE6E26),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    '로그인',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // 묵상 시작

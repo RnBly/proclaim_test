@@ -86,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 180,
                   ),
 
-                  const SizedBox(height: 80),
+                  const SizedBox(height: 40),
 
                   // 로그인 안내 카드
                   Container(
